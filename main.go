@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"net"
 
-	"test/fileTest2/gofile_block/internal"
-	"test/fileTest2/gofile_block/networker/client"
-	"test/fileTest2/gofile_block/networker/server"
-	"test/fileTest2/gofile_block/pipe"
-	"test/fileTest2/gofile_block/serialworker"
+	"gofile_block/internal"
+	"gofile_block/networker/client"
+	"gofile_block/networker/server"
+	"gofile_block/pipe"
+	"gofile_block/serialworker"
 )
 
 var file = flag.String("f", "test.txt", "input the file name")
@@ -32,20 +33,34 @@ func main() {
 			fmt.Println("input the file name with -f ")
 			return
 		}
-		bbytes := internal.Defaultbuffer.GetBytesbuffer(*file)
-		ctrl.Write(bbytes)
+
+		internal.Defaultbuffer.Create(*file)
+		fmt.Println(internal.Defaultbuffer)
+		for {
+			bbytes, err := internal.Defaultbuffer.ReadBlock()
+			if (err != nil) && (err != io.EOF) {
+				panic(err)
+			}
+			if err == io.EOF {
+				fmt.Println("send file complite!")
+			}
+			fmt.Println(bbytes.Bytes())
+			ctrl.Write(bbytes)
+		}
+
 	} else if *port != "" {
-		fmt.Println("get file")
 		s := &server.Server{
+
 			Conn: make(chan net.Conn),
 		}
 
 		ctrl = s
 		go s.Run(*port)
 		for {
-			fmt.Println("begin for")
 			bb := ctrl.Read()
-			internal.Defaultbuffer.PutBytesbufferToFile(bb.Bytes())
+
+			internal.Defaultbuffer.WriteBlock(bb.Bytes())
+
 		}
 	} else if (*com != "") && (*mode != "") {
 		fmt.Println("opened com port is:", *com)
@@ -71,5 +86,4 @@ func main() {
 	} else {
 		fmt.Println("Please input gofile -h for help")
 	}
-
 }

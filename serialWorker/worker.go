@@ -3,8 +3,6 @@ package serialworker
 import (
 	"bytes"
 	"fmt"
-
-	//	"fmt"
 	"io"
 
 	"github.com/jacobsa/go-serial/serial"

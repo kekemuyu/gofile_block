@@ -40,7 +40,7 @@ func (s *Server) Read() bytes.Buffer {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(buf)
+
 	var bb bytes.Buffer
 	_, err = bb.Write(buf)
 	if err != nil {

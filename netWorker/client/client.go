@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 )
 
@@ -25,7 +24,7 @@ func (c *Client) Write(bb bytes.Buffer) {
 	defer c.Conn.Close()
 	_, err := c.Conn.Write(bb.Bytes())
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
 
