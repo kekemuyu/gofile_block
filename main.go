@@ -4,7 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
+
+	//	"time"
 
 	"gofile_block/internal"
 	"gofile_block/networker/client"
@@ -35,31 +36,50 @@ func main() {
 		}
 
 		internal.Defaultbuffer.Create(*file)
-		fmt.Println(internal.Defaultbuffer)
+
 		for {
 			bbytes, err := internal.Defaultbuffer.ReadBlock()
 			if (err != nil) && (err != io.EOF) {
 				panic(err)
 			}
+			//			fmt.Println(bbytes)
+			if len(bbytes.Bytes()) > 0 {
+				//				fmt.Println(bbytes)
+				ctrl.Write(bbytes)
+				//				time.Sleep(time.Microsecond * 100)
+			}
 			if err == io.EOF {
 				fmt.Println("send file complite!")
+				for {
+				}
 			}
-			fmt.Println(bbytes.Bytes())
-			ctrl.Write(bbytes)
 		}
 
 	} else if *port != "" {
-		s := &server.Server{
 
-			Conn: make(chan net.Conn),
-		}
-
-		ctrl = s
-		go s.Run(*port)
+		go server.DefaultServer.Run(*port)
 		for {
-			bb := ctrl.Read()
+			if server.DefaultServer.Flag != true {
+				continue
+			}
+			//			fmt.Println(server.DefaultServer.Flag)
+			buf := make([]byte, 2)
 
-			internal.Defaultbuffer.WriteBlock(bb.Bytes())
+			n, err := server.DefaultServer.Conn.Read(buf)
+			bsLens := int(buf[1])<<8 + int(buf[0])
+			if bsLens == 0 {
+				fmt.Println("读取到长度为0")
+				for {
+				}
+			}
+			buf = make([]byte, bsLens)
+
+			n, err = server.DefaultServer.Conn.Read(buf)
+			if err != nil {
+				panic(err)
+			}
+			//			fmt.Println(buf[:n])
+			internal.Defaultbuffer.WriteBlock(buf[:n])
 
 		}
 	} else if (*com != "") && (*mode != "") {

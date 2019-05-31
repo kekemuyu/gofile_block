@@ -3,8 +3,9 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
+
 	"io/ioutil"
 
 	"os"
@@ -13,103 +14,89 @@ import (
 const Blocksize = 1024
 
 type File struct {
-	Name string
-	Size int64
-	Off  int64
-	Data []byte
+	Handle *os.File //文件
+	Start  byte     //开始标志
+	Name   string   //文件名称
+	Size   int64    //文件大小
+	Off    int64    //文件位置偏移
 }
 
 type Buffer struct {
-	Filein   *os.File
-	FileInfo File
+	Fileinfo File
 }
 
-var Defaultbuffer = &Buffer{
-	Filein: nil,
-}
+var Defaultbuffer Buffer
 
-func (b *Buffer) Create(fileName string) {
-	fin, err := os.Open(fileName)
+func (b *Buffer) OpenFile(name string) {
+	fin, err := os.Open(name)
 	if err != nil {
 		panic(err)
 	}
+	b.Fileinfo.Handle = fin
+}
+
+func (b *Buffer) GetFileInfo(name string) {
 
 	fileInfo, err := fin.Stat()
 	if err != nil {
 		panic(err)
 	}
+
 	fileObj := File{
-		Name: fileInfo.Name(),
-		Size: fileInfo.Size(),
-		Off:  0,
-		Data: make([]byte, Blocksize),
+		Handle: b.Fileinfo.Handle,
+		Start:  0xAA,
+		Name:   fileInfo.Name(),
+		Size:   fileInfo.Size(),
+		Off:    0,
 	}
 
-	Defaultbuffer = &Buffer{
-		Filein:   fin,
-		FileInfo: fileObj,
-	}
+	b.Fileinfo = fileObj
 }
 
-func (b *Buffer) GetBytesbuffer(fileName string) bytes.Buffer {
-	bs, err := ioutil.ReadFile(b.FileInfo.Name)
-
-	if err != nil {
-		panic(err)
-	}
-
-	b.FileInfo.Data = bs
-	objBytes, err := json.Marshal(b.FileInfo)
-	if err != nil {
-		panic(err)
-	}
-
-	var data bytes.Buffer
-	_, err = data.Write(objBytes)
-	if err != nil {
-		panic(err)
-	}
-	return data
-}
-
-func (b *Buffer) PutBytesbufferToFile(bs []byte) {
-	//	var obj File
-	//	n, err := json.Unmarshal(bs, &obj)
-	//	if err != nil {
-	//		fmt.Println(err)
-	//		return
-	//	}
-
-	//	ioutil.WriteFile(obj.Name, obj.Data, 0666)
-}
-
-func (b *Buffer) ReadBlock() (bytes.Buffer, error) {
+func (b *Buffer) ReadBlock() (bytes.Buffer, int, error) {
 	var outbb bytes.Buffer
 	var bs []byte
 	var err error
 
-	bs = make([]byte, Blocksize)
+	bsize := Blocksize
+	if b.Fileinfo.Size <= 0 {
+		return bytes.Buffer{}, 0, errors.New("文件大小为0")
+	} else if b.Fileinfo.Size < Blocksize {
+		bsize = int(b.Fileinfo.Size)
+	} else if (b.Fileinfo.Size - b.Fileinfo.Size.Off) < Blocksize {
+		bsize = int(b.Fileinfo.Size - Defaultbuffer.FileInfo.Off)
+	}
 
-	n, err := b.Filein.ReadAt(bs, b.FileInfo.Off)
-	if (n <= 0) && (err != io.EOF) {
+	if bsize == 0 {
+		bsize = 1
+	}
+	bs = make([]byte, bsize)
+	n, err := b.Fileinfo.Handle.ReadAt(bs, Defaultbuffer.FileInfo.Off)
+	if n <= 0 {
 		fmt.Println(err)
-		return bytes.Buffer{}, err
+		return bytes.Buffer{}, 0, err
 	}
 
-	b.FileInfo = File{
-		Data: bs,
+	if b.Fileinfo.Start == 0xAA { //如果是开始发送第一包
+		b.Fileinfo.Start = 0x00
+
+		bs := make()
 	}
-	outbs, err := json.Marshal(b.FileInfo)
+	outbs, err := json.Marshal(Defaultbuffer.FileInfo)
 	if err != nil {
 		fmt.Println("ReadBlock marshal error", err)
 		return bytes.Buffer{}, err
 	}
+	bsLen := len(outbs)
+	outbb.WriteByte(byte(bsLen & 0xFF))
+	outbb.WriteByte(byte((bsLen >> 8) & 0xFF))
 	if _, err = outbb.Write(outbs); err != nil {
 		fmt.Println("ReadBlock writebuffer error", err)
 		return bytes.Buffer{}, err
 	}
+	fmt.Println(Defaultbuffer.FileInfo.Off)
+	Defaultbuffer.FileInfo.Off = Defaultbuffer.FileInfo.Off + int64(n)
 
-	b.FileInfo.Off = b.FileInfo.Off + int64(n)
 	return outbb, err
 
 }
@@ -125,14 +112,17 @@ func (b *Buffer) WriteBlock(bs []byte) {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(fileinfo)
+	Defaultbuffer.FileInfo = fileinfo
+
 	if Defaultbuffer.Filein == nil {
 		if Defaultbuffer.Filein, err = os.Create(fileinfo.Name); err != nil {
 			fmt.Println("create file error", err)
 			return
 		}
-		Defaultbuffer.Create(Defaultbuffer.FileInfo.Name)
-		fmt.Println(Defaultbuffer)
+		if Defaultbuffer.Filein, err = os.Create(fileinfo.Name); err != nil {
+			panic(err)
+		}
+		Defaultbuffer.FileInfo.Off = 0
 	}
 	Defaultbuffer.FileInfo.Data = fileinfo.Data
 	bsize := Blocksize
@@ -141,11 +131,12 @@ func (b *Buffer) WriteBlock(bs []byte) {
 	}
 
 	var wlen int
-	fmt.Println(Defaultbuffer.FileInfo.Off)
+	//	fmt.Println(Defaultbuffer.FileInfo)
 	if wlen, err = Defaultbuffer.Filein.WriteAt(Defaultbuffer.FileInfo.Data, Defaultbuffer.FileInfo.Off); err != nil {
 		panic(err)
 		return
 	}
+	fmt.Println(Defaultbuffer.FileInfo.Off)
 	Defaultbuffer.FileInfo.Off = Defaultbuffer.FileInfo.Off + int64(wlen)
 
 }

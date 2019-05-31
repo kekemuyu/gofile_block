@@ -8,8 +8,11 @@ import (
 )
 
 type Server struct {
-	Conn chan net.Conn
+	Conn net.Conn
+	Flag bool
 }
+
+var DefaultServer = Server{}
 
 func (s *Server) Run(addr string) {
 	listener, err := net.Listen("tcp", addr)
@@ -24,29 +27,28 @@ func (s *Server) Run(addr string) {
 		}
 		fmt.Println("有一个客户端上线：", conn.RemoteAddr().String())
 
-		s.Conn <- conn
-
+		DefaultServer.Conn = conn
+		DefaultServer.Flag = true
 	}
 
 }
 
 func (s *Server) Read() bytes.Buffer {
-	fmt.Println("server")
+	if s.Flag {
+		buf, err := ioutil.ReadAll(s.Conn)
+		if err != nil {
+			panic(err)
+		}
 
-	conn := <-s.Conn
-
-	defer conn.Close()
-	buf, err := ioutil.ReadAll(conn)
-	if err != nil {
-		panic(err)
+		var bb bytes.Buffer
+		_, err = bb.Write(buf)
+		if err != nil {
+			panic(err)
+		}
+		return bb
+	} else {
+		return bytes.Buffer{}
 	}
-
-	var bb bytes.Buffer
-	_, err = bb.Write(buf)
-	if err != nil {
-		panic(err)
-	}
-	return bb
 
 }
 
