@@ -20,8 +20,8 @@ func New(hostname string) *Client {
 	}
 }
 
-func (c *Client) Write(bb bytes.Buffer) {
-	_, err := c.Conn.Write(bb.Bytes())
+func (c *Client) Write(bs []byte) {
+	_, err := c.Conn.Write(bs)
 	if err != nil {
 		panic(err)
 	}
