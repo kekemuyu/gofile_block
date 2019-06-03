@@ -85,7 +85,9 @@ func main() {
 			bsLens := int(buf[1])<<8 + int(buf[0])
 			if (n == 0) || (err != nil) {
 				fmt.Println("文件接收完毕")
+				internal.Defaultbuffer.Fileinfo.Handle.Close()
 				server.DefaultServer.Conn.Close()
+				server.DefaultServer.Flag = false
 				continue
 			}
 			if buf[2] == 0xAA {
